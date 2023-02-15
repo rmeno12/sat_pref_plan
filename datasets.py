@@ -17,17 +17,23 @@ import torch
 
 # this breaks for odd patch sizes
 # todo: fix this
-def extract_patch(image, x, y, patch_size, stride) -> torch.Tensor:
+def extract_patch(image: torch.Tensor, x: int, y: int, patch_size: int) -> torch.Tensor:
+    # print(f"getting patch at ({x}, {y}) of size {patch_size})")
     patch = torch.zeros(3, patch_size, patch_size)
     img_patch = image[
         :,
         max(0, y - patch_size // 2) : min(y + patch_size // 2, image.shape[1]),
         max(0, x - patch_size // 2) : min(x + patch_size // 2, image.shape[2]),
     ]
+    # print(img_patch.shape)
+    # print(y - patch_size // 2, y + patch_size // 2)
+    # print(x - patch_size // 2, x + patch_size // 2)
+    a = 0 if y - patch_size // 2 > 0 else patch_size // 2 - y
+    b = 0 if x - patch_size // 2 > 0 else patch_size // 2 - x
     patch[
         :,
-        0 if y - patch_size // 2 > 0 else patch_size // 2 - y :,
-        0 if x - patch_size // 2 > 0 else patch_size // 2 - x :,
+        a : a + img_patch.shape[1],
+        b : b + img_patch.shape[2],
     ] = img_patch
 
     return patch / 255
@@ -40,9 +46,8 @@ def extract_pyramid(image, index, patch_size, levels, stride) -> torch.Tensor:
 
     for i in range(levels):
         p = patch_size * 2**i
-        s = stride * 2**i
         patches[3 * i : 3 * i + 3] = T.Resize(size=patch_size)(
-            extract_patch(image, x, y, p, s)
+            extract_patch(image, x, y, p)
         )
     return patches
 
@@ -139,8 +144,8 @@ class ModifiedPatchPatchDataset(PatchDataset):
         x = index % (self.image1.shape[2] // self.stride) * self.stride
         y = index // (self.image1.shape[2] // self.stride) * self.stride
 
-        og_patch = extract_patch(self.image1, x, y, self.patch_size, self.stride)
-        mod_patch = extract_patch(self.image2, x, y, self.patch_size, self.stride)
+        og_patch = extract_patch(self.image1, x, y, self.patch_size)
+        mod_patch = extract_patch(self.image2, x, y, self.patch_size)
         return og_patch, compare_patches(og_patch, mod_patch).any()
 
 
@@ -152,8 +157,8 @@ class ModifiedPatchPixelDataset(PatchDataset):
         x = index % (self.image1.shape[2] // self.stride) * self.stride
         y = index // (self.image1.shape[2] // self.stride) * self.stride
 
-        og_patch = extract_patch(self.image1, x, y, self.patch_size, self.stride)
-        mod_patch = extract_patch(self.image2, x, y, self.patch_size, self.stride)
+        og_patch = extract_patch(self.image1, x, y, self.patch_size)
+        mod_patch = extract_patch(self.image2, x, y, self.patch_size)
         return og_patch, compare_patches(og_patch, mod_patch)
 
 
@@ -165,8 +170,8 @@ class ModifiedPyramidPatchPatchDataset(PyramidPatchDataset):
         x = index % (self.image1.shape[2] // self.stride) * self.stride
         y = index // (self.image1.shape[2] // self.stride) * self.stride
 
-        og_patch = extract_patch(self.image1, x, y, self.patch_size, self.stride)
-        mod_patch = extract_patch(self.image2, x, y, self.patch_size, self.stride)
+        og_patch = extract_patch(self.image1, x, y, self.patch_size)
+        mod_patch = extract_patch(self.image2, x, y, self.patch_size)
 
         return (
             extract_pyramid(
@@ -184,8 +189,8 @@ class ModifiedPyramidPatchPixelDataset(PyramidPatchDataset):
         x = index % (self.image1.shape[2] // self.stride) * self.stride
         y = index // (self.image1.shape[2] // self.stride) * self.stride
 
-        og_patch = extract_patch(self.image1, x, y, self.patch_size, self.stride)
-        mod_patch = extract_patch(self.image2, x, y, self.patch_size, self.stride)
+        og_patch = extract_patch(self.image1, x, y, self.patch_size)
+        mod_patch = extract_patch(self.image2, x, y, self.patch_size)
 
         return (
             extract_pyramid(

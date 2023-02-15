@@ -1,0 +1,12 @@
+poc setup:
+- planning
+	- use map of eer (masked for planning now and unmasked for trying learning)
+	- use vrl model to create costmap from map
+	- do graph search to get across eer lawn (create plan)
+- action
+	- replan when needed
+		- if execution error makes go too far away
+		- if map doesn't look like reality
+			- how to decide how close?? 
+	- set carrot of graph nav to be plan points
+

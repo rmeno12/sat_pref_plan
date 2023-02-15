@@ -133,7 +133,6 @@ class ConvClassifier(Module):
 
     def forward(self, x):
         x = self.conv(x)
-        print(x.shape)
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
