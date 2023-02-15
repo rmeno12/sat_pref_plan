@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "sat-pref-plan"
+version = "0.1.0"
+description = ""
+authors = ["Rahul Menon <rmeno12@utexas.edu>"]
+readme = "README.md"
+packages = [{ include = "sat_pref_plan" }]
+
+[tool.poetry.dependencies]
+python = "^3.8.1"
+opencv-python = "^4.7.0.68"
+tensorboard = "^2.12.0"
+tqdm = "^4.64.1"
+pyyaml = "^6.0"
+pycryptodomex = "^3.17"
+python-gnupg = "^0.5.0"
+rospkg = "^1.4.0"
+torch = "~1.11"
+torchvision = "~0.12"
+torcheval = "^0.0.6"
+matplotlib = "^3.7.0"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.1.0"
+flake8 = "^6.0.0"
+mypy = "^1.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
