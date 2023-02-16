@@ -1,100 +1,115 @@
+import argparse
 import datetime
+from pathlib import Path
 
 import torch
+from loguru import logger
 from torch.utils.data import DataLoader, random_split
-from torcheval.metrics import Mean
+from torch.utils.tensorboard import SummaryWriter
+from torcheval.metrics import BinaryF1Score, Mean
+from tqdm import trange
 
 from sat_pref_plan.data.modified import ModifiedPyramidPatchPatchDataset
 from sat_pref_plan.models.convnet import ConvClassifier
 from sat_pref_plan.run import utils
 
 
-def main():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using {device} device")
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--datadir", type=str, required=True)
+    parser.add_argument("--savedir", type=str, required=True)
+    parser.add_argument("--epochs", type=int, default=500)
+    parser.add_argument("--batchsize", type=int, default=32)
+    parser.add_argument("--patchsize", type=int, default=64)
+    parser.add_argument("--stride", type=int, default=16)
+    parser.add_argument("--numlevels", type=int, default=3)
+    parser.add_argument("--nocuda", action="store_true", default=False)
+    args = parser.parse_args()
 
-    im1 = "./eer_lawn_unmasked.jpg"
-    im2 = "./eer_lawn_moremasked.jpg"
+    device = torch.device(
+        "cuda" if torch.cuda.is_available() and not args.nocuda else "cpu"
+    )
+    logger.info(f"Using {device} device")
 
-    patch_size = 64
-    num_levels = 3
+    datadir = Path(args.datadir)
+    if not datadir.is_dir():
+        logger.error(f"Invalid data directory: {datadir}")
+        exit(1)
+
+    patch_size: int = args.patchsize
+    num_levels: int = args.numlevels
+    stride: int = args.stride
     dataset = ModifiedPyramidPatchPatchDataset(
-        im1, im2, patch_size, num_levels=num_levels, stride=16
+        datadir, patch_size, num_levels=num_levels, stride=stride
     )
+    tsize = int(len(dataset) * 0.8)
+    vsize = len(dataset) - tsize
     train, val = random_split(
-        dataset, [0.8, 0.2], generator=torch.Generator().manual_seed(42)
+        dataset, [tsize, vsize], generator=torch.Generator().manual_seed(42)
     )
-    batch_size = 32
+    batch_size: int = args.batchsize
     tloader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=4)
     vloader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=4)
-    print(f"Training size: {len(train)}, Validation size: {len(val)}")
+    logger.info(f"Training size: {len(train)}, Validation size: {len(val)}")
 
     learning_rate = 0.01
-    epochs = 500
+    epochs: int = args.epochs
     model = ConvClassifier(1, in_channels=3 * num_levels).to(device)
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     loss_fn = torch.nn.BCELoss()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, factor=0.5, patience=10, verbose=True
+    )
 
-    # data = next(iter(tloader))
-    # # while not data[1].any():
-    # #     data = next(iter(tloader))
-    # print(data[0].shape, data[1].shape)
-    # print(data[0].dtype, data[1].dtype)
-    # print(data[1])
-    # p = model(data[0].to(device))
-    # print(p.shape)
-    # print(p.dtype)
+    stamp = str(datetime.datetime.now()).replace(" ", "_")
+    savedir = Path(args.savedir + "/" + stamp)
+    savedir.mkdir(parents=True, exist_ok=True)
+    ckptdir = savedir.joinpath("ckpts")
+    ckptdir.mkdir(parents=True, exist_ok=True)
+    tb_writer = SummaryWriter(log_dir=str(savedir) + "/tb_logs")
 
-    tlosses = []
-    vlosses = []
-    # tf1s = []
-    # vf1s = []
-    for t in range(epochs):
-        model.train(True)
-        # tf1 = BinaryF1Score(device=device)
-        tfl = Mean(device=device)
-        for batch, (X, y) in enumerate(tloader):
+    for t in trange(epochs, desc="Epochs"):
+        model.train()
+        tl = Mean(device=device)
+        tf1 = BinaryF1Score(device=device)
+        for X, y in tloader:
             X, y = X.to(device), y.to(device)
 
-            # predict
             pred = model(X)
             loss = loss_fn(pred, y[:, None].float())
-            # tf1.update(pred[:, 0], y[:, 0])
-            tfl.update(loss)
+            tf1.update(pred[:, 0], y)
+            tl.update(loss)
 
-            # backprop
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        tlosses.append(tfl.compute().item())
-        # tf1s.append(tf1.compute().item())
+        train_loss = tl.compute().item()
+        train_f1 = tf1.compute().item()
 
-        model.train(False)
-        # vf1 = BinaryF1Score(device=device)
-        vl = Mean(device=device)
-        for batch, (X, y) in enumerate(vloader):
-            X, y = X.to(device), y.to(device)
+        torch.save(model.state_dict(), ckptdir.joinpath(f"model_{t}.pt"))
 
-            # predict
-            pred = model(X)
-            loss = loss_fn(pred, y[:, None].float())
-            # vf1.update(pred[:, 0], y[:, 0])
-            vl.update(loss)
-        vlosses.append(vl.compute().item())
-        # vf1s.append(vf1.compute().item())
+        model.eval()
+        with torch.no_grad():
+            vf1 = BinaryF1Score(device=device)
+            vl = Mean(device=device)
+            for X, y in vloader:
+                X, y = X.to(device), y.to(device)
 
-        if t % 10 == 9:
-            print(f"Epoch {t+1}")
-            print(f"Val Loss: {vlosses[-1]}")
-            print(f"Train Loss: {tlosses[-1]}")
+                pred = model(X)
+                loss = loss_fn(pred, y[:, None].float())
+                vf1.update(pred[:, 0], y)
+                vl.update(loss)
+            val_loss = vl.compute().item()
+            val_f1 = vf1.compute().item()
 
-    saveroot = "results/conv_modpyr/"
-    stamp = str(datetime.datetime.now()).replace(" ", "_")
+        tb_writer.add_scalar("Loss/train", train_loss, t)
+        tb_writer.add_scalar("F1/train", train_f1, t)
+        tb_writer.add_scalar("Loss/val", val_loss, t)
+        tb_writer.add_scalar("F1/val", val_f1, t)
 
-    utils.plot_loss(tlosses, vlosses, saveroot + f"{stamp}_loss.png")
+        scheduler.step(val_loss)
 
-    torch.save(model.state_dict(), saveroot + f"{stamp}.pt")
-    return
+    utils.saveconfig(savedir, model, args)
 
 
 if __name__ == "__main__":

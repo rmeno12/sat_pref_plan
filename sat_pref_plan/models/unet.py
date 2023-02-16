@@ -12,7 +12,8 @@ from torch.nn import (
     Upsample,
 )
 
-# taken mostly from https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_parts.py
+"""taken mostly from https://github.com/milesial/Pytorch-UNet/blob/master/unet/unet_parts.py
+"""
 
 
 class DoubleConv(Module):

@@ -9,25 +9,24 @@ from sat_pref_plan.data.utils import extract_patch_pair, extract_pyramid
 class MatchingPatchDataset(PatchDataset):
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         l: int = len(self)
-        assert index < l, f"Index {index} out of range [0, {l})."
+        if index >= l:
+            raise IndexError(f"Index {index} out of range [0, {l}).")
 
-        return extract_patch_pair(
-            index, self.image1, self.image2, self.patch_size, self.stride
-        )
+        u, m = self._get_image_pair_from_index(index)
+
+        return extract_patch_pair(index, u, m, self.patch_size, self.stride)
 
 
 class MatchingPyramidPatchDataset(PyramidPatchDataset):
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         l: int = len(self)
-        assert index < l, f"Index {index} out of range [0, {l})."
+        if index >= l:
+            raise IndexError(f"Index {index} out of range [0, {l}).")
 
-        _, mod_patch = extract_patch_pair(
-            index, self.image1, self.image2, self.patch_size, self.stride
-        )
+        u, m = self._get_image_pair_from_index(index)
+        _, mod_patch = extract_patch_pair(index, u, m, self.patch_size, self.stride)
 
         return (
-            extract_pyramid(
-                self.image1, index, self.patch_size, self.num_levels, self.stride
-            ),
+            extract_pyramid(u, index, self.patch_size, self.num_levels, self.stride),
             mod_patch,
         )

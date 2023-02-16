@@ -2,3 +2,6 @@
 .vscode/
 __pycache__/
 .mpypy_cache/
+
+data/
+runs/
