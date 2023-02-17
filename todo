@@ -10,3 +10,7 @@ poc setup:
 			- how to decide how close?? 
 	- set carrot of graph nav to be plan points
 
+
+for unet training
+- should learn to map from sky to embedded local view
+  - ie satellite view -> embedding(ground view)

@@ -44,9 +44,7 @@ def main() -> None:
     )
     tsize = int(len(dataset) * 0.8)
     vsize = len(dataset) - tsize
-    train, val = random_split(
-        dataset, [tsize, vsize], generator=torch.Generator().manual_seed(42)
-    )
+    train, val = random_split(dataset, [tsize, vsize])
     batch_size: int = args.batchsize
     tloader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=4)
     vloader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=4)
@@ -67,6 +65,7 @@ def main() -> None:
     ckptdir = savedir.joinpath("ckpts")
     ckptdir.mkdir(parents=True, exist_ok=True)
     tb_writer = SummaryWriter(log_dir=str(savedir) + "/tb_logs")
+    tb_writer.add_text("Model type", str(model.__class__.__name__))
 
     for t in trange(epochs, desc="Epochs"):
         model.train()
@@ -109,7 +108,7 @@ def main() -> None:
 
         scheduler.step(val_loss)
 
-    utils.saveconfig(savedir, model, args)
+    utils.saveconfig(savedir, model, dataset, args)
 
 
 if __name__ == "__main__":
