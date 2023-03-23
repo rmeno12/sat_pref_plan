@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 
-from sat_pref_plan.data.base import PatchDataset, PyramidPatchDataset
+from sat_pref_plan.data._deprecated.base import PatchDataset, PyramidPatchDataset
 from sat_pref_plan.data.utils import (
     compare_patches,
     extract_patch_pair,
