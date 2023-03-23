@@ -13,9 +13,6 @@ def extract_patch(image: torch.Tensor, x: int, y: int, patch_size: int) -> torch
         max(0, y - patch_size // 2) : min(y + patch_size // 2, image.shape[1]),
         max(0, x - patch_size // 2) : min(x + patch_size // 2, image.shape[2]),
     ]
-    # print(img_patch.shape)
-    # print(y - patch_size // 2, y + patch_size // 2)
-    # print(x - patch_size // 2, x + patch_size // 2)
     a = 0 if y - patch_size // 2 > 0 else patch_size // 2 - y
     b = 0 if x - patch_size // 2 > 0 else patch_size // 2 - x
     patch[

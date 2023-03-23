@@ -4,4 +4,5 @@ __pycache__/
 .mpypy_cache/
 
 data/
+!sat_pref_plan/data/
 runs/
