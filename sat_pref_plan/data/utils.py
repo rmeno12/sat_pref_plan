@@ -1,12 +1,12 @@
 from typing import Tuple
+
 import torch
 import torchvision.transforms as T
 
 
 # this breaks for odd patch sizes
-# todo: fix this
+# TODO: fix this
 def extract_patch(image: torch.Tensor, x: int, y: int, patch_size: int) -> torch.Tensor:
-    # print(f"getting patch at ({x}, {y}) of size {patch_size})")
     patch = torch.zeros(3, patch_size, patch_size)
     img_patch = image[
         :,

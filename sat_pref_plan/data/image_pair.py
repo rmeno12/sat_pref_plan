@@ -1,5 +1,5 @@
-from typing import Optional, Tuple
 from pathlib import Path
+from typing import Optional, Tuple
 
 import torch
 from loguru import logger
@@ -37,23 +37,22 @@ class BaseImagePairDataset(Dataset):
             / (self.__class__.__name__ + self.custom_text)
             / self.unmasked_image_path.stem
         )
-        print(f"Cache path: {self.cache_path}")
         self.X: Optional[torch.Tensor] = None
         self.y: Optional[torch.Tensor] = None
-        self._load_data(unmasked_image_path, masked_image_path)
+        self._load_data()
 
-    def _load_data(self, unmasked_image_path: Path, masked_image_path: Path) -> None:
+    def _load_data(self) -> None:
         # check cache for data, load it from there if possible
         cache_loaded = self._load_from_cache()
 
         # otherwise, load images and generate data and then save to cache
         if not cache_loaded:
             logger.info(
-                f"Cached data not found, loading data from images: {unmasked_image_path}, {masked_image_path}"
+                f"Cached data not found, loading data from images: {self.unmasked_image_path}, {self.masked_image_path}"
             )
             self._load_from_images(
-                read_image(unmasked_image_path.as_posix()),
-                read_image(masked_image_path.as_posix()),
+                read_image(self.unmasked_image_path.as_posix()),
+                read_image(self.masked_image_path.as_posix()),
             )
             self._save_to_cache()
 
