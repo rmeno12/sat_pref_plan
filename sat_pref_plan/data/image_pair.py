@@ -8,6 +8,7 @@ from torchvision.io import read_image
 from tqdm import trange
 
 from sat_pref_plan.data.utils import extract_patch_pair, extract_pyramid
+from sat_pref_plan.utils import hashing
 
 
 class BaseImagePairDataset(Dataset):
@@ -18,7 +19,7 @@ class BaseImagePairDataset(Dataset):
         cache_dir: Path,
         patch_size: int,
         stride: int,
-        embedder: torch.nn.Module,
+        embedder: torch.jit.ScriptModule,
         device: torch.device = torch.device("cpu"),
         num_workers: int = 4,
         custom_text: Optional[str] = None,
@@ -35,6 +36,7 @@ class BaseImagePairDataset(Dataset):
         self.cache_path = (
             self.cache_dir
             / (self.__class__.__name__ + self.custom_text)
+            / hashing.hash_script(embedder)
             / self.unmasked_image_path.stem
         )
         self.X: Optional[torch.Tensor] = None
@@ -115,7 +117,7 @@ class ImagePairPyramid2PixelDataset(BaseImagePairDataset):
         cache_dir: Path,
         patch_size: int,
         stride: int,
-        embedder: torch.nn.Module,
+        embedder: torch.jit.ScriptModule,
         num_levels: int = 3,
         device: torch.device = torch.device("cpu"),
         num_workers: int = 4,
@@ -157,14 +159,35 @@ class ImagePairPyramid2PixelDataset(BaseImagePairDataset):
                 _, m = extract_patch_pair(
                     i, unmasked_image, masked_image, self.patch_size, self.stride
                 )
-                em: torch.Tensor = self.embedder(m)
+                em: torch.Tensor = self.embedder(
+                    m.to(self.device)
+                )  # single value per patch
+                out_y = (
+                    em.unsqueeze(-1)
+                    .unsqueeze(-1)
+                    .expand(em.shape[0], self.patch_size, self.patch_size)
+                )  # make every pixel in that patch have the same value
 
                 Xs.append(
                     extract_pyramid(
                         unmasked_image, i, self.patch_size, self.num_levels, self.stride
                     )
                 )
-                ys.append(em)
+                ys.append(out_y)
 
             self.X = torch.stack(Xs)
             self.y = torch.stack(ys)
+
+    def _load_patch_task(
+        self, i: int, unmasked_image: torch.Tensor, masked_image: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        _, m = extract_patch_pair(
+            i, unmasked_image, masked_image, self.patch_size, self.stride
+        )
+        em: torch.Tensor = self.embedder(m)
+
+        X = extract_pyramid(
+            unmasked_image, i, self.patch_size, self.num_levels, self.stride
+        )
+        y = em
+        return X, y

@@ -4,10 +4,9 @@ from typing import List, Optional, Tuple
 import torch
 from torch.utils.data import Dataset
 
-from sat_pref_plan.data.image_pair import (
-    BaseImagePairDataset,
-    ImagePairPyramid2PixelDataset,
-)
+from sat_pref_plan.data.image_pair import ImagePairPyramid2PixelDataset
+
+# from sat_pref_plan.utils import parallel
 
 
 class BaseMultiImagePairDataset(Dataset):
@@ -17,7 +16,7 @@ class BaseMultiImagePairDataset(Dataset):
         cache_dir: Path,
         patch_size: int,
         stride: int,
-        embedder: torch.nn.Module,
+        embedder: torch.jit.ScriptModule,
         device: torch.device = torch.device("cpu"),
         num_workers: int = 4,
         custom_text: Optional[str] = None,
@@ -50,15 +49,21 @@ class BaseMultiImagePairDataset(Dataset):
                 f"Unmasked and masked images do not match in {self.data_folder}"
             )
 
-        # TODO: load each pair dataset in parallel
+        # data = parallel.fork_join(
+        #     self._get_single_dataset,
+        #     list(zip(unmasked_images, masked_images)),
+        #     n_proc=self.num_workers,
+        # )
         Xs: List[torch.Tensor] = []
         ys: List[torch.Tensor] = []
         for u, m in zip(unmasked_images, masked_images):
-            d = self._make_single_dataset(u, m)
-            if d.X is not None and d.y is not None:
-                Xs.append(d.X)
-                ys.append(d.y)
+            dX, dy = self._get_single_dataset(u, m)
+            if dX is not None and dy is not None:
+                Xs.append(dX)
+                ys.append(dy)
 
+        # self.X = torch.cat([x for x, _ in data])
+        # self.y = torch.cat([y for _, y in data])
         self.X = torch.cat(Xs)
         self.y = torch.cat(ys)
 
@@ -86,12 +91,15 @@ class BaseMultiImagePairDataset(Dataset):
 
         return unmasked_image_paths, masked_image_paths
 
-    def _make_single_dataset(
+    def _get_single_dataset(
         self,
         unmasked_image_path: Path,
         masked_image_path: Path,
-    ) -> BaseImagePairDataset:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
+
+    # def _single_dataset_pll(self, u: Path, m: Path, res_q: mp.Queue) -> None:
+    #     res_q.put(self._get_single_dataset(u, m))
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         if self.X is None or self.y is None:
@@ -100,10 +108,10 @@ class BaseMultiImagePairDataset(Dataset):
 
 
 class MultiImagePairPyramid2PixelDataset(BaseMultiImagePairDataset):
-    def _make_single_dataset(
+    def _get_single_dataset(
         self, unmasked_image_path: Path, masked_image_path: Path
-    ) -> BaseImagePairDataset:
-        return ImagePairPyramid2PixelDataset(
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        dataset = ImagePairPyramid2PixelDataset(
             unmasked_image_path,
             masked_image_path,
             self.cache_dir,
@@ -114,3 +122,9 @@ class MultiImagePairPyramid2PixelDataset(BaseMultiImagePairDataset):
             device=self.device,
             num_workers=self.num_workers,
         )
+        if dataset.X is not None and dataset.y is not None:
+            return dataset.X, dataset.y
+        else:
+            raise RuntimeError(
+                f"Could not load single image dataset ({unmasked_image_path}, {masked_image_path})"
+            )
